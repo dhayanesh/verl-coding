@@ -1,5 +1,13 @@
 # Coding GRPO with verl
 
+For Copilot experiments from VS Code through Kubernetes, read [program.md](program.md).
+Edit [autoresearch.yaml](autoresearch.yaml) for the training pod, then run
+`python scripts/autoresearch.py init` inside it with MODEL_PATH and SANDBOX_URL
+exported. The runner freezes the experiment protocol and records bounded trials;
+Copilot chooses learning-rate and KL candidates. Run `python scripts/autoresearch.py
+--help` for commands. The Kubernetes training path still requires a successful
+end-to-end baseline on your cluster.
+
 This is a small training project for `google/gemma-3-1b-it`. It uses:
 
 - **verl** for GRPO training

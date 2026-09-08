@@ -1,0 +1,15 @@
+# Edit before `python scripts/autoresearch.py init` inside the training pod.
+# MODEL_PATH and SANDBOX_URL must be exported. Use shared persistent paths.
+gpus: 1
+nodes: 1
+ray_address: auto  # Existing Ray cluster. Use null to start a local cluster.
+local_cpus: 8     # Used only when ray_address is null.
+reward_workers: 2
+train_batch_size: 8
+ppo_mini_batch_size: 8
+steps: 20
+tuning_prompts: 64
+seed: 42
+timeout_seconds: 7200
+max_tuning_runs: 6  # Baseline plus five candidates, including failed attempts.
+max_final_runs: 2   # Baseline and selected winner on the reserved split.
