@@ -1,0 +1,8 @@
+/models/
+/outputs/
+/.venv/
+__pycache__/
+*.pyc
+*.log
+.env
+.env.*

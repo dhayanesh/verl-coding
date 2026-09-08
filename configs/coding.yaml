@@ -1,0 +1,147 @@
+# GRPO training with managed vLLM rollouts and executable Python rewards.
+defaults:
+  - ppo_trainer
+  - _self_
+
+hydra:
+  searchpath:
+    - pkg://verl.trainer.config
+
+algorithm:
+  adv_estimator: grpo
+  norm_adv_by_std_in_grpo: true
+  use_kl_in_reward: false
+
+data:
+  train_files:
+    - ${oc.env:PROJECT_DIR}/data/train/part-00000.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00001.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00002.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00003.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00004.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00005.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00006.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00007.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00008.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00009.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00010.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00011.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00012.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00013.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00014.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00015.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00016.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00017.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00018.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00019.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00020.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00021.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00022.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00023.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00024.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00025.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00026.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00027.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00028.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00029.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00030.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00031.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00032.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00033.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00034.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00035.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00036.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00037.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00038.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00039.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00040.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00041.parquet
+    - ${oc.env:PROJECT_DIR}/data/train/part-00042.parquet
+  val_files:
+    - ${oc.env:PROJECT_DIR}/data/validation/part-00000.parquet
+    - ${oc.env:PROJECT_DIR}/data/validation/part-00001.parquet
+    - ${oc.env:PROJECT_DIR}/data/validation/part-00002.parquet
+  train_batch_size: 8
+  max_prompt_length: 2048
+  max_response_length: 1024
+  filter_overlong_prompts: true
+  truncation: error
+  seed: 42
+
+actor_rollout_ref:
+  model:
+    path: ${oc.env:MODEL_PATH,google/gemma-3-1b-it}
+    # Plain padded attention makes the first experiment easier to debug.
+    use_remove_padding: false
+    enable_gradient_checkpointing: true
+    override_config:
+      attn_implementation: sdpa
+  actor:
+    strategy: fsdp2
+    optim:
+      lr: 1.0e-6
+    ppo_mini_batch_size: 8
+    ppo_micro_batch_size_per_gpu: 1
+    ppo_epochs: 1
+    use_kl_loss: true
+    kl_loss_coef: 0.001
+    kl_loss_type: low_var_kl
+    entropy_coeff: 0.0
+    fsdp_config:
+      model_dtype: bfloat16
+      use_torch_compile: false
+  ref:
+    strategy: fsdp2
+    log_prob_micro_batch_size_per_gpu: 1
+    fsdp_config:
+      param_offload: true
+      model_dtype: bfloat16
+      use_torch_compile: false
+  rollout:
+    name: vllm
+    # Async requests to a managed server; the training iterations remain synchronous.
+    mode: async
+    n: 4
+    temperature: 0.8
+    top_p: 0.95
+    tensor_model_parallel_size: 1
+    gpu_memory_utilization: 0.4
+    enforce_eager: true
+    max_num_seqs: 16
+    max_num_batched_tokens: 4096
+    log_prob_micro_batch_size_per_gpu: 1
+    val_kwargs:
+      n: 1
+      do_sample: false
+      temperature: 0.0
+
+reward:
+  num_workers: 2
+  custom_reward_function:
+    path: ${oc.env:PROJECT_DIR}/reward.py
+    name: compute_score
+    reward_kwargs:
+      sandbox_url: ${oc.env:SANDBOX_URL,http://127.0.0.1:8080/run_code}
+  reward_model:
+    enable: false
+
+trainer:
+  nnodes: 1
+  n_gpus_per_node: 1
+  total_training_steps: 100
+  total_epochs: 1
+  logger: [console, tensorboard]
+  project_name: verl_coding
+  experiment_name: gemma_coding
+  val_before_train: true
+  test_freq: 10
+  save_freq: 10
+  resume_mode: disable
+  max_actor_ckpt_to_keep: 2
+  default_local_dir: ${oc.env:PROJECT_DIR}/outputs/${trainer.experiment_name}/checkpoints
+  rollout_data_dir: ${oc.env:PROJECT_DIR}/outputs/${trainer.experiment_name}/rollouts
+  validation_data_dir: ${oc.env:PROJECT_DIR}/outputs/${trainer.experiment_name}/validation
+
+ray_kwargs:
+  ray_init:
+    num_cpus: 8
